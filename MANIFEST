@@ -1,0 +1,8 @@
+Changes
+lib/Music/Tag/Amazon.pm
+Makefile.PL
+MANIFEST			This list of files
+README
+t/amazon.t
+t/pod.t
+META.yml                                 Module meta-data (added by MakeMaker)
