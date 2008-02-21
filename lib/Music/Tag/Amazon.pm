@@ -1,5 +1,5 @@
 package Music::Tag::Amazon;
-our $VERSION = 0.28;
+our $VERSION = 0.29;
 
 # Copyright (c) 2007 Edward Allen III. Some rights reserved.
 #
@@ -280,9 +280,19 @@ sub get_tag {
     return $self;
 }
 
+=item lwp
+
+Returns and optionally sets reference to underlying LWP user agent.
+
+=cut
+
 sub lwp {
     my $self = shift;
-    unless ( ( exists $self->{lwp} ) && ( $self->{lwp} ) ) {
+	my $new = shift;
+	if ($new) {
+		$self->{lwp_ua} = $new;
+	}
+    unless ( ( exists $self->{lwp_ua} ) && ( $self->{lwp_ua} ) ) {
         if ( $self->options->{amazon_ua} ) {
             $self->{lwp_ua} = $self->options->{lwp_ua};
         }
@@ -294,8 +304,18 @@ sub lwp {
     return $self->{lwp_ua};
 }
 
+=item amazon_cache
+
+Returns and optionally sets a reference to the Cache::FileCache object used to cache amazon requests.
+
+=cut
+
 sub amazon_cache {
     my $self = shift;
+	my $new = shift;
+	if ($new) {
+		$self->{amazon_cache} = $new;
+	}
     unless ( ( exists $self->{amazon_cache} ) && ( $self->{amazon_cache} ) ) {
         if ( $self->options->{amazon_cache} ) {
             $self->{amazon_cache} = $self->options->{amazon_cache};
@@ -312,8 +332,18 @@ sub amazon_cache {
     return $self->{amazon_cache};
 }
 
+=item amazon_cache
+
+Returns and optionally sets reference to the Cache::FileCache object used to cache downloaded cover art.
+
+=cut
+
 sub coverart_cache {
     my $self = shift;
+	my $new = shift;
+	if ($new) {
+		$self->{coverart_cache} = $new;
+	}
     unless ( ( exists $self->{coverart_cache} ) && ( $self->{coverart_cache} ) ) {
         if ( $self->options->{coverart_cache} ) {
             $self->{coverart_cache} = $self->options->{coverart_cache};
@@ -331,8 +361,18 @@ sub coverart_cache {
 
 }
 
+=item amazon_ua
+
+Returns and optionally sets reference to Net::Amazon object.
+
+=cut
+
 sub amazon_ua {
     my $self = shift;
+	my $new = shift;
+	if ($new) {
+		$self->{amazon_ua} = $new;
+	}
     unless ( ( exists $self->{amazon_ua} ) && ( $self->{amazon_ua} ) ) {
         if ( $self->options->{amazon_ua} ) {
             $self->{amazon_ua} = $self->options->{amazon_ua};
@@ -351,6 +391,14 @@ sub amazon_ua {
 }
 
 =pod
+
+=item default_options
+
+Returns the default options for the plugin.  
+
+=item set_tag
+
+Not used by this plugin.
 
 =back
 
@@ -575,12 +623,14 @@ L<Net::Amazon>
 
 Edward Allen III <ealleniii _at_ cpan _dot_ org>
 
-=head1 COPYRIGHT
-
-Copyright (c) 2007 Edward Allen III. Some rights reserved.
+=head1 LICENSE
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the Artistic License, distributed
 with Perl.
+
+=head1 COPYRIGHT
+
+Copyright (c) 2007,2008 Edward Allen III. Some rights reserved.
 
 =cut

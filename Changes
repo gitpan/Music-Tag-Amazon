@@ -1,3 +1,9 @@
+Release Name: 0.29
+===========================
+* Added option to set several internal objects, such as the cache objects.
+* Fixed bug in lwp method which would cause it to create a new object every call!
+* Kwalitee improvments
+
 Release Name: 0.28
 ===========================
 * Split off from Music::Tag distribution
