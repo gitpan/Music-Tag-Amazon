@@ -1,3 +1,9 @@
+Release Name: 0.30
+===========================
+* Added amazon_info option and several new set values
+* Set upc and ean and will search by these
+* Example code
+
 Release Name: 0.29
 ===========================
 * Added option to set several internal objects, such as the cache objects.

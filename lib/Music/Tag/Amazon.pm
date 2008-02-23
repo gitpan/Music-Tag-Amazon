@@ -1,5 +1,5 @@
 package Music::Tag::Amazon;
-our $VERSION = 0.29;
+our $VERSION = 0.30;
 
 # Copyright (c) 2007 Edward Allen III. Some rights reserved.
 #
@@ -23,7 +23,7 @@ Music::Tag::Amazon - Plugin module for Music::Tag to get information from Amazon
 	my $plugin = $info->add_plugin("Amazon");
 	$plugin->get_tag;
 
-print "Record Label is ", $info->label();
+	print "Record Label is ", $info->label();
 
 =head1 DESCRIPTION
 
@@ -73,6 +73,8 @@ tracknum is used only if title is not true, or if trust_track option is set.
 
 =item album
 
+Album name is set if necessary.
+
 =item title
 
 title is set only if trust_track is true.
@@ -87,14 +89,49 @@ highres is tried, then medium-res, then low. If low-res is a gif, it gives up.
 
 =item asin
 
+Amazon Store Identification Number
+
 =item label
 
+Label of Album
+
 =item releasedate
+
+Release Date
+
+=item upc
+
+UPC / Barcode 
+
+=item ean
+
+EAN. Valid outside of US only.
+
+=item B<Amazon Optional Values>
+
+These requires amazon_info optiom be true.
+
+=over 4
+
+=item amazon_salesrank
+
+=item amazon_description
+
+=item amazon_price
+
+=item amazon_listprice
+
+=item amazon_usedprice
+
+=item amazon_usedcount
+
+=back
 
 
 =cut
 
 use strict;
+use warnings;
 use Net::Amazon;
 use Net::Amazon::Request::Artist;
 use Net::Amazon::Request::ASIN;
@@ -114,6 +151,7 @@ sub default_options {
        ignore_asin      => 0,
        max_pages        => 10,
        locale           => "us",
+	   amazon_info		=> 0,
     };
 }
 
@@ -175,6 +213,10 @@ Minimum number of points an album must have to win election. Default 10.
 
 Locale code for store to use. Valid are ca, de, fr, jp, uk or us as of now.  Maybe more...
 
+=item amazon_info
+
+Return optional info.
+
 =back
 
 =head1 METHODS
@@ -205,6 +247,8 @@ sub get_tag {
 
     my $totaldiscs = 0;
     my $discs      = $self->_tracks_by_discs($p);
+	#print STDERR Dumper($p);
+
 
     if ((defined $discs) && ($discs->[0])) {
         my $tracknum = 0;
@@ -247,25 +291,43 @@ sub get_tag {
                 $self->tagchange("TOTALDISCS");
             }
     }
-
-    unless ( ( $p->album ) && ( lc( $p->album ) eq lc( $self->info->album ) ) ) {
-        $self->info->album( $p->{album} );
-        $self->tagchange("ALBUM");
-    }
     my $releasedate = $self->_amazon_to_sql( $p->ReleaseDate );
     unless ( ($releasedate) && ( $releasedate eq $self->info->releasedate ) ) {
         $self->info->releasedate($releasedate);
         $self->tagchange("RELEASEDATE");
     }
-    unless ( ( $p->label ) && ( lc( $p->label ) eq lc( $self->info->label ) ) ) {
-        $self->info->label( $p->label );
-        $self->tagchange("LABEL");
+    unless ( $self->info->url) { 
+		#my $url = "http://amazon.com/o/ASIN/".$asin;
+		my $url = $p->DetailPageURL;
+		$self->info->url($url);
+		$self->tagchange("URL");
     }
-    my $asin = $p->ASIN;
-    unless ( ($asin) && ( lc($asin) eq lc( $self->info->asin ) ) ) {
-        $self->info->asin($asin);
-        $self->tagchange("ASIN");
-    }
+
+	my %method_map = (
+		album => "album",
+		label => "label",
+		ASIN => "asin",
+		upc => "upc",
+		ean => "ean",
+	   ($self->options->{amazon_info}) ?
+	   ( SalesRank => "amazon_salesrank",
+	   	 ProductDescription => "amazon_description",
+		 OurPrice	=> "amazon_price",
+		 Availability	=> "amazon_availability",
+		 ListPrice	=> "amazon_listprice",
+		 UsedPrice	=> "amazon_usedprice",
+		 UsedCount	=> "amazon_usedcount",
+	   ) :
+	   ()
+	);
+	while (my ($am, $mm) = each %method_map) {
+		#Make sure datamethod exists
+		$self->info->datamethods($mm);
+		unless ( ( $p->$am ) && (defined $p->$am) && (defined $self->info->$mm) && ( $p->$am eq $self->info->$mm  ) ) {
+			$self->info->$mm( $p->$am );
+			$self->tagchange(uc($mm));
+		}
+	}
     if (    ( $p->ImageUrlLarge )
          && ( ( not $self->info->picture ) || ( $self->options('coveroverwrite') ) ) ) {
         $self->status( "DOWNLOADING LARGE COVER ART ", $p->ImageUrlLarge );
@@ -406,9 +468,10 @@ Not used by this plugin.
 
 If the asin value is true in the tag object, then the lookup is done with this value. Otherwise, it performs a search for all albums by artist, and then waits each album to see which is the most likely. It assigns point using the following values:
 
-  Matches ASIN:            64 pts
+  Matches ASIN:            128 pts
+  Matches UPC or EAN:      64 pts
   Full name match:         32 pts
-   or close name match:    16 pts
+   or close name match:    20 pts
   Contains name of track:  10 pts
    or title match:         8 pts 
   Matches totaltracks:     4 pts
@@ -426,9 +489,21 @@ sub _album_lookup {
 
     my $req = Net::Amazon::Request::Artist->new( artist => $self->info->artist );
 
+	# UPC and EAN are not currently a core datamethod, let's add...
+	$self->info->datamethods("upc");
+	$self->info->datamethods("ean");
+
     if ( ( $self->info->asin ) && ( not $self->options->{ignore_asin} ) ) {
         $self->status( "Doing ASIN lookup with ASIN: ", $self->info->asin );
         $req = Net::Amazon::Request::ASIN->new( asin => $self->info->asin );
+    }
+    elsif ( ( $self->info->upc ) && ( not $self->options->{ignore_upc} ) ) {
+        $self->status( "Doing UPC lookup with UPC: ", $self->info->upc );
+        $req = Net::Amazon::Request::UPC->new( upc => $self->info->upc, mode => 'music' );
+    }
+    elsif ( ( $self->info->ean ) && ( not $self->options->{ignore_ean} ) && (not $self->options->{locale} eq 'us' )) {
+        $self->status( "Doing EAN lookup with EAN: ", $self->info->ean );
+        $req = Net::Amazon::Request::EAN->new( ean => $self->info->ean );
     }
 
     my $resp = $self->amazon_ua->request($req);
@@ -451,26 +526,30 @@ sub _album_lookup {
         unless ($curmatch) {
             $curmatch = $p;
         }
-        my $asin = $p->{Asin} || $p->{ASIN};
+        my $asin = $p->ASIN;
         $self->status( "Checking out ASIN: ", $asin );
         if (    ($asin)
              && ( uc($asin) eq uc( $self->info->asin ) )
              && ( not $self->options->{ignore_asin} ) ) {
+            $score += 128;
+        }
+        if ((($self->info->upc) && ( $p->upc eq $self->info->upc )) or
+			(($self->info->ean) && ( $p->ean eq $self->info->ean )))  {
             $score += 64;
         }
-        if (($self->info->album) && ( $p->{album} eq $self->info->album )) {
+        if (($self->info->album) && ( $p->album eq $self->info->album )) {
             $score += 32;
         }
-        elsif (($self->info->album) && ( $self->simple_compare( $p->{album}, $self->info->album, ".80" ) )) {
-            $score += 16;
+        elsif (($self->info->album) && ( $self->simple_compare( $p->album, $self->info->album, ".80" ) )) {
+            $score += 20;
         }
         if  ((defined $self->info->totaltracks) && ( scalar @{ $p->{tracks} } == $self->info->totaltracks )) {
             $score += 4;
         }
-        if ((defined $self->info->year) && ( $p->{year} == $self->info->year )) {
+        if ((defined $self->info->year) && ( $p->year == $self->info->year )) {
             $score += 2;
         }
-        if ( $p->{year} < $curmatch->{year} ) {
+        if ( $p->year < $curmatch->{year} ) {
             $score += 1;
         }
         my $m = 0;
