@@ -1,12 +1,15 @@
 package Music::Tag::Amazon;
-our $VERSION = 0.31;
+our $VERSION = 0.33;
 
-# Copyright (c) 2007 Edward Allen III. Some rights reserved.
+# Copyright (c) 2009 Edward Allen III. Some rights reserved.
+
 #
-## This program is free software; you can redistribute it and/or
-## modify it under the terms of the Artistic License, distributed
-## with Perl.
+# You may distribute under the terms of either the GNU General Public
+# License or the Artistic License, as specified in the README file.
 #
+
+
+
 
 =pod
 
@@ -35,7 +38,7 @@ Music::Tag::Amazon - Plugin module for Music::Tag to get information from Amazon
 
 This plugin gathers additional information about a track from amazon, and updates the Music::Tag object.
 
-Music::Tag::Amazon must be created by Music::Tag.
+Music::Tag::Amazon objects must be created by Music::Tag.
 
 =begin readme
 
@@ -185,7 +188,8 @@ sub default_options {
        trust_title      => 0,
        trust_track      => 0,
        coveroverwrite   => 0,
-       token            => "0V2FQAQSWYH6XMJB8G82",
+       token      =>  "YOURTOKEN",
+	   secret_key => "SECRET",
        min_album_points => 10,
        ignore_asin      => 0,
        max_pages        => 10,
@@ -218,7 +222,11 @@ Default false. When this is true, a new cover is downloaded and the current cove
 
 =item B<token>
 
-Amazon Developer token. Change to one given to you by Amazon.
+Amazon Developer token. Change to one given to you by Amazon. REQUIRED OPTION.
+
+=item B<secret_key>
+
+Amazon Developer secret key. Change to one given to you by Amazon. REQUIRED OPTION.
 
 =item B<min_album_points>
 
@@ -345,14 +353,13 @@ sub get_tag {
 	}
     if (    ( $p->ImageUrlLarge )
          && ( ( not $self->info->picture ) || ( $self->options('coveroverwrite') ) ) ) {
-        $self->status(0, "DOWNLOADING LARGE COVER ART ", $p->ImageUrlLarge );
-        $self->info->picture( $self->_cover_art( $p->ImageUrlLarge ) );
+        $self->_cover_art( $p->ImageUrlLarge ) && $self->tagchange('picture', $p->ImageUrlLarge);
+            
     }
 
     if (    ( $p->ImageUrlMedium )
          && ( ( not $self->info->picture ) ) ) {
-        $self->status(0, "DOWNLOADING MEDIUM COVER ART ", $p->ImageUrlMedium );
-        $self->info->picture( $self->_cover_art( $p->ImageUrlMedium ) );
+        $self->_cover_art( $p->ImageUrlMedium ) && $self->tagchange('picture', $p->ImageUrlMedium);
     }
     return $self;
 }
@@ -456,6 +463,7 @@ sub amazon_ua {
         }
         else {
             $self->{amazon_ua} = Net::Amazon->new( token      => $self->options->{token},
+												   secret_key => $self->options->{secret_key},
                                                    cache      => $self->amazon_cache,
                                                    max_pages  => $self->options->{max_pages},
                                                    locale     => $self->options->{locale},
@@ -606,9 +614,13 @@ sub _cover_art {
     my $url  = shift;
     my $art  = $self->coverart_cache->get($url);
 
-    unless ($art) {
-        $self->status(1, "DOWNLOADING URL: $url");
+    if ($art) {
+        $self->status(0, "USING CACHED URL: $url");
+    }
+    else {
+        $self->status(0, "DOWNLOADING URL: $url");
         my $res = $self->lwp->get($url);
+        return 0 unless $res->is_success;
         $art = $res->content;
         $self->coverart_cache->set( $url, $art );
     }
@@ -622,14 +634,18 @@ sub _cover_art {
     #   $image->Resize(width=>300, height=>300);
     #   $image->BlobToImage($art);
 
-    return {
+    my $picture = {
         "Picture Type" => "Cover (front)",
         "MIME type"    => "image/jpg",
         Description    => "",
 
         #       _Data => $image->ImageToBlob(magick => 'jpg'),
         _Data => $art,
-           }
+           };
+    if ($picture) {
+        $self->info->picture($picture);
+    }
+    return 1;
 
 }
 
@@ -714,6 +730,28 @@ L<Net::Amazon>, L<Music::Tag>
 
 =over 4
 
+=item Release Name: 0.33
+
+=over 4
+
+=item *
+
+Added secret_key option required by Amazon now.
+
+=back
+
+=item Release Name: 0.32
+
+=over 4
+
+=item *
+
+Changed license to allow option of GPL
+
+=back
+
+=begin changes
+
 =item Release Name: 0.31
 
 =over 4
@@ -736,7 +774,6 @@ Now using Pod::Readme and Test::Spelling
 
 =back
 
-=begin changes
 
 =item Release Name: 0.30
 
@@ -798,9 +835,29 @@ Edward Allen III <ealleniii _at_ cpan _dot_ org>
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the Artistic License, distributed
-with Perl.
+This program is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either:
+
+a) the GNU General Public License as published by the Free
+Software Foundation; either version 1, or (at your option) any
+later version, or
+
+b) the "Artistic License" which comes with Perl.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See either
+the GNU General Public License or the Artistic License for more details.
+
+You should have received a copy of the Artistic License with this
+Kit, in the file named "Artistic".  If not, I'll be glad to provide one.
+
+You should also have received a copy of the GNU General Public License
+along with this program in the file named "Copying". If not, write to the
+Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA 02110-1301, USA or visit their web page on the Internet at
+http://www.gnu.org/copyleft/gpl.html.
+
 
 =head1 COPYRIGHT
 
